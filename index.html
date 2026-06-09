@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <title>SI Mértékegység Átváltás Gyakorló</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { color: #2c3e50; margin-bottom: 10px; }
+        .menu { margin-bottom: 20px; }
+        button { padding: 10px 20px; font-size: 16px; background-color: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; margin-bottom: 10px; font-weight: bold; }
+        button:hover { background-color: #27ae60; }
+        .btn-blue { background-color: #3498db; }
+        .btn-blue:hover { background-color: #2980b9; }
+        .btn-purple { background-color: #9b59b6; }
+        .btn-purple:hover { background-color: #8e44ad; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 950px; width: 100%; text-align: center; }
+        .name-section { margin-bottom: 25px; }
+        .name-section input { width: 250px; padding: 8px; font-size: 15px; border: 1px solid #ccc; border-radius: 4px; }
+        .name-error { border-color: #e74c3c !important; background-color: #fce4d6; }
+        table { border-collapse: collapse; width: 100%; background-color: white; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        th, td { border: 1px solid #bdc3c7; padding: 12px; text-align: center; font-size: 16px; }
+        th { background-color: #34495e; color: white; }
+        .unit-cell { font-weight: bold; background-color: #ecf0f1; width: 150px; }
+        .given-value { font-weight: bold; color: #2c3e50; background-color: #f9f9f9; }
+        input.answer-input { width: 80%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size: 15px; }
+        input.answer-input:disabled { background-color: #f0f0f0; color: #555; }
+        .correct { background-color: #d4edda !important; color: #155724; }
+        .incorrect { background-color: #f8d7da !important; color: #721c24; }
+        .feedback { font-size: 18px; font-weight: bold; margin-top: 15px; height: 25px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Mértékegység Átváltás Gyakorló</h1>
+    
+    <div class="menu">
+        <button class="btn-blue" onclick="changeCategory('hosszusag')">Hosszúság</button>
+        <button class="btn-blue" onclick="changeCategory('terulet')">Terület</button>
+        <button class="btn-blue" onclick="changeCategory('terfogat')">Térfogat</button>
+        <button class="btn-blue" onclick="changeCategory('tomeg')">Tömeg</button>
+        <button class="btn-blue" onclick="changeCategory('ido')">Idő</button>
+        <button class="btn-blue" onclick="changeCategory('vegyes')">Vegyes feladatok</button>
+    </div>
+
+    <div id="game-box" style="display:none;">
+        <h2 id="category-title">Kategória</h2>
+        
+        <div class="name-section">
+            <label for="student-name"><strong>Tanuló neve:</strong> </label>
+            <input type="text" id="student-name" placeholder="Írd be a neved..." oninput="clearNameError()">
+        </div>
+
+        <p>Töltsd ki a táblázat hiányzó mezőit! Minden oszlopban egy érték adott.</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Mértékegység</th>
+                    <th>1. feladat</th>
+                    <th>2. feladat</th>
+                    <th>3. feladat</th>
+                    <th>4. feladat</th>
+                    <th>5. feladat</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                <!-- A sorok dinamikusan generálódnak -->
+            </tbody>
+        </table>
+
+        <div class="action-buttons">
+            <button id="check-btn" onclick="checkAnswers()">Ellenőrzés</button>
+            <button class="btn-blue" onclick="generateTasks()">Új feladatok</button>
+            <button id="cert-download-btn" class="btn-purple" style="display: none;" onclick="createCertificate()">Igazolás letöltése (.txt)</button>
+        </div>
+        
+        <div class="feedback" id="feedback-text"></div>
+    </div>
+</div>
+<script>
+    // A mértékegység csoportok az alapegységhez viszonyított pontos váltószámokkal
+    const dataset = {
+        hosszusag: { 
+            title: "Hosszúság", 
+            units: ["mm", "cm", "m", "km"], 
+            baseFactors: [0.001, 0.01, 1, 1000] 
+        },
+        terulet: { 
+            title: "Terület", 
+            units: ["cm²", "dm²", "m²"], 
+            baseFactors: [0.0001, 0.01, 1] 
+        },
+        terfogat: { 
+            title: "Térfogat", 
+            units: ["cm³", "dm³", "m³"], 
+            baseFactors: [0.000001, 0.001, 1] 
+        },
+        tomeg: { 
+            title: "Tömeg", 
+            units: ["g", "kg", "t"], 
+            baseFactors: [0.001, 1, 1000] 
+        },
+        ido: { 
+            title: "Idő", 
+            units: ["s", "perc", "óra"], 
+            baseFactors: [1, 60, 3600] 
+        }
+    };
+
+    let currentCategory = '', dynamicAnswers = [], currentUnitsCount = 0, categories = Object.keys(dataset);
+    let startTime = null, totalSeconds = 0, finalScoreString = "";
+
+    function changeCategory(category) {
+        currentCategory = category;
+        document.querySelectorAll('.menu button').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.menu button').forEach(btn => {
+            if(btn.getAttribute('onclick').includes(category)) btn.classList.add('active');
+        });
+        document.getElementById('game-box').style.display = 'block';
+        generateTasks();
+    }
+
+    function generateTasks() {
+        document.getElementById('feedback-text').innerText = '';
+        document.getElementById('cert-download-btn').style.display = 'none';
+        document.getElementById('check-btn').disabled = false;
+        clearNameError();
+
+        let activeCategory = currentCategory === 'vegyes' ? categories[Math.floor(Math.random() * categories.length)] : currentCategory;
+        const data = dataset[activeCategory];
+        document.getElementById('category-title').innerText = data.title;
+        currentUnitsCount = data.units.length;
+
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+
+        for (let row = 0; row < currentUnitsCount; row++) {
+            let tr = document.createElement('tr');
+            let tdUnit = document.createElement('td');
+            tdUnit.className = 'unit-cell';
+            tdUnit.innerText = data.units[row];
+            tr.appendChild(tdUnit);
+
+            for (let col = 0; col < 5; col++) {
+                let tdCell = document.createElement('td');
+                tdCell.id = `cell-${row}-${col}`;
+                tr.appendChild(tdCell);
+            }
+            tbody.appendChild(tr);
+        }
+
+        dynamicAnswers = [];
+        for (let col = 0; col < 5; col++) {
+            let baseValue = activeCategory === 'ido' ? [1, 2, 3, 4, 5, 10, 1.5, 2.5][Math.floor(Math.random() * 8)] : Math.floor(Math.random() * 90) + 10;
+            let midIndex = activeCategory === 'hosszusag' ? 2 : 1; 
+            let baseInStandard = baseValue * data.baseFactors[midIndex];
+
+            let colAnswers = [];
+            for (let row = 0; row < currentUnitsCount; row++) {
+                colAnswers.push(Number((baseInStandard / data.baseFactors[row]).toFixed(4)));
+            }
+            dynamicAnswers.push(colAnswers);
+
+            const visibleRowIndex = Math.floor(Math.random() * currentUnitsCount);
+            for (let row = 0; row < currentUnitsCount; row++) {
+                const cell = document.getElementById(`cell-${row}-${col}`);
+                if (row === visibleRowIndex) {
+                    cell.innerHTML = dynamicAnswers[col][row];
+                    cell.className = "given-value";
+                } else {
+                    cell.innerHTML = `<input type="number" step="any" class="answer-input" id="input-${row}-${col}"><span id="sol-${row}-${col}"></span>`;
+                    cell.className = "";
+                }
+            }
+        }
+        startTime = new Date();
+    }
+	function checkAnswers() {
+        let correctCount = 0, totalInputs = 0;
+        const feedback = document.getElementById('feedback-text');
+        totalSeconds = Math.round((new Date() - startTime) / 1000);
+        if (totalSeconds < 1) totalSeconds = 1;
+
+        // MEZŐZÁROLÁS: Ellenőrzés gomb letiltása
+        document.getElementById('check-btn').disabled = true;
+
+        for (let col = 0; col < 5; col++) {
+            for (let row = 0; row < currentUnitsCount; row++) {
+                const inputElement = document.getElementById(`input-${row}-${col}`);
+                const solElement = document.getElementById(`sol-${row}-${col}`);
+                if (inputElement) {
+                    totalInputs++;
+                    
+                    // MEZŐZÁROLÁS: Beviteli mezők lezárása a csalás ellen
+                    inputElement.disabled = true; 
+                    const userAnswer = parseFloat(inputElement.value);
+                    const correctAnswer = dynamicAnswers[col][row];
+
+                    if (!isNaN(userAnswer) && Math.abs(userAnswer - correctAnswer) < 0.001) {
+                        inputElement.parentElement.className = 'correct';
+                        correctCount++;
+                    } else {
+                        inputElement.parentElement.className = 'incorrect';
+                        // SÚGÓ FUNKCIÓ: Biztonságosan kiírja a jó megoldást a lezárt mező alá
+                        if (solElement) {
+                            solElement.innerHTML = `<br><span style="font-size:11px;color:#b71c1c;font-weight:bold;">(Jó: ${correctAnswer})</span>`;
+                        }
+                    }
+                }
+            }
+        }
+
+        finalScoreString = `${correctCount}/${totalInputs}`;
+        if (correctCount === totalInputs) {
+            feedback.innerText = `Szuper! Minden feladatot hibátlanul megoldottad! 🎉 (Idő: ${totalSeconds} s)`;
+            feedback.style.color = "#27ae60";
+        } else {
+            feedback.innerText = `Találtam hibát! Elért eredmény: ${finalScoreString}. A piros mezőket nézd át! ❌ (Idő: ${totalSeconds} s)`;
+            feedback.style.color = "#c0392b";
+        }
+        document.getElementById('cert-download-btn').style.display = 'inline-block';
+    }
+
+    function clearNameError() {
+        const nameInput = document.getElementById('student-name');
+        nameInput.classList.remove('name-error');
+        nameInput.placeholder = "Írd be a neved...";
+    }
+
+    async function sha256(message) {
+        const msgBuffer = new TextEncoder().encode(message);                    
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function createCertificate() {
+        let nameInput = document.getElementById('student-name');
+        let nev = nameInput.value.trim();
+        const feedback = document.getElementById('feedback-text');
+        
+        if (nev === "") { 
+            nameInput.classList.add('name-error');
+            nameInput.placeholder = "KÉRLEK, ÍRD BE A NEVED!";
+            nameInput.focus();
+            feedback.innerText = "⚠️ Kérlek, írd be a neved a letöltés előtt!";
+            feedback.style.color = "#c0392b";
+            return; 
+        }
+
+        let most = new Date();
+        let timestamp = `${most.getFullYear()}. ${String(most.getMonth() + 1).padStart(2, '0')}. ${String(most.getDate()).padStart(2, '0')}. ${String(most.getHours()).padStart(2, '0')}:${String(most.getMinutes()).padStart(2, '0')}:${String(most.getSeconds()).padStart(2, '0')}`;
+
+        let ellenorzoSztring = `${nev}|${timestamp}|${finalScoreString}|${totalSeconds}|Fizika2024`;
+        let hashKod = await sha256(ellenorzoSztring);
+
+        let tartalom = `=== IGAZOLÁS ===\nNév: ${nev}\nIdőpont: ${timestamp}\nEredmény: ${finalScoreString}\nIdő: ${totalSeconds} mp\n----------------\nKÓD:\n${hashKod}\n================`;
+
+        let blob = new Blob([tartalom], { type: "text/plain;charset=utf-8" });
+        let link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `Fizika_Igazolas_${nev.replace(/\s+/g, '_')}.txt`;
+        link.click();
+    }
+</script>
+</body>
+</html>
